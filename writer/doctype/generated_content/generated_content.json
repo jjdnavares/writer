@@ -1,0 +1,71 @@
+{
+ "name": "Generated Content",
+ "module": "Writer",
+ "owner": "Administrator",
+ "engine": "InnoDB",
+ "istable": 0,
+ "naming_rule": "autoincrement",
+ "autoname": "format:GC-{#####}",
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Text Editor",
+   "label": "Content"
+  },
+  {
+   "fieldname": "prompt",
+   "fieldtype": "Text",
+   "label": "Prompt"
+  },
+    {
+   "fieldname": "keyword",
+   "fieldtype": "Data",
+   "label": "Keyword"
+  },
+  {
+   "fieldname": "tone",
+   "fieldtype": "Data",
+   "label": "Tone"
+  },
+  {
+   "fieldname": "content_type",
+   "fieldtype": "Data",
+   "label": "Content Type"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Data",
+   "label": "Provider"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model"
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "User",
+   "options": "User"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1
+  }
+ ],
+ "track_changes": 1
+}
