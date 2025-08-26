@@ -4,19 +4,14 @@
 import frappe
 from .prompts import CONTENT_PROMPTS, HUMANIZE_PROMPT
 import openai
-import os
 
+@frappe.whitelist()
 def _get_openai_client(provider: str):
-    # It's recommended to set the API key in site_config.json
-    # e.g. "openai_api_key": "your-api-key"
-    api_key = frappe.conf.get(f"{provider}_api_key")
-
-    # Fallback for backward compatibility or global key
-    if not api_key and provider == "openai":
-        api_key = frappe.conf.get("openai_api_key")
+    api_key_dict = get_llm_api_key(provider)
+    api_key = api_key_dict.get("api_key")
 
     if not api_key:
-        frappe.throw(f"API key for '{provider}' is not set in site_config.json.")
+        frappe.throw(f"API key for '{provider}' is not set for the current user.")
     return openai.OpenAI(api_key=api_key)
 
 def _call_llm(prompt: str, provider: str, model: str) -> str:
@@ -93,14 +88,44 @@ def get_content_prompts():
 
 @frappe.whitelist()
 def set_llm_api_key(provider: str, api_key: str):
-    # Note: This is a simplified approach. For production, use a more secure secret management system.
-    # This key is stored globally for this example.
-    # A better approach would be to store it per-user and encrypted.
-    frappe.conf[f"{provider}_api_key"] = api_key
-    frappe.conf.save()
+    user = frappe.session.user
+    llm_settings_name = frappe.db.exists("LLM Settings", {"user": user})
+
+    if llm_settings_name:
+        doc = frappe.get_doc("LLM Settings", llm_settings_name)
+    else:
+        doc = frappe.new_doc("LLM Settings")
+        doc.user = user
+
+    # Check if the provider already exists
+    provider_exists = False
+    for setting in doc.provider_settings:
+        if setting.provider == provider:
+            setting.api_key = api_key
+            provider_exists = True
+            break
+
+    if not provider_exists:
+        doc.append("provider_settings", {
+            "provider": provider,
+            "api_key": api_key
+        })
+
+    doc.save(ignore_permissions=True)
     return {"status": "success"}
+
 
 @frappe.whitelist()
 def get_llm_api_key(provider: str):
-    api_key = frappe.conf.get(f"{provider}_api_key")
-    return {"api_key": api_key} if api_key else {}
+    user = frappe.session.user
+    llm_settings_name = frappe.db.exists("LLM Settings", {"user": user})
+
+    if not llm_settings_name:
+        return {}
+
+    doc = frappe.get_doc("LLM Settings", llm_settings_name)
+    for setting in doc.provider_settings:
+        if setting.provider == provider:
+            return {"api_key": setting.get_password("api_key")}
+
+    return {}

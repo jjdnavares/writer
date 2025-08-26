@@ -9,9 +9,7 @@ import type { ModelInfo } from '@/types/provider';
 import type { LanguageModel } from 'ai';
 import type { IProviderSetting } from '@/types/model';
 import { createOpenAI } from '@ai-sdk/openai';
-import { createScopedLogger } from '@/lib/logger';
 
-const logger = createScopedLogger('OpenAIProvider');
 
 interface OpenAIModel {
   id: string;
@@ -27,6 +25,10 @@ interface OpenAIModelsResponse {
  * OpenAI Provider implementation
  */
 export default class OpenAIProvider extends BaseProvider {
+  static providerName = 'OpenAI';
+  constructor() {
+    super();
+  }
   name = 'OpenAI';
   getApiKeyLink = 'https://platform.openai.com/api-keys';
   labelForGetApiKey = 'Get OpenAI API Key';
@@ -48,7 +50,7 @@ export default class OpenAIProvider extends BaseProvider {
     settings?: IProviderSetting,
     serverEnv?: Record<string, string>,
   ): Promise<ModelInfo[]> {
-    logger.debug(`Getting dynamic models - hasApiKeys: ${!!apiKeys}, hasSettings: ${!!settings}, hasServerEnv: ${!!serverEnv}`);
+    this.logger.debug(`Getting dynamic models - hasApiKeys: ${!!apiKeys}, hasSettings: ${!!settings}, hasServerEnv: ${!!serverEnv}`);
     
     const { apiKey } = this.getProviderBaseUrlAndKey({
       apiKeys,
@@ -59,16 +61,16 @@ export default class OpenAIProvider extends BaseProvider {
     });
 
     if (!apiKey) {
-      logger.error('Missing API key configuration');
+      this.logger.error('Missing API key configuration');
       throw `Missing Api Key configuration for ${this.name} provider`;
     }
     
-    logger.debug('API key retrieved successfully');
+    this.logger.debug('API key retrieved successfully');
 
     let filteredModels: OpenAIModel[] = [];
     
     try {
-      logger.debug('Fetching models from OpenAI API');
+      this.logger.debug('Fetching models from OpenAI API');
       const response = await fetch(`https://api.openai.com/v1/models`, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -77,12 +79,12 @@ export default class OpenAIProvider extends BaseProvider {
       
       if (!response.ok) {
         const errorText = await response.text();
-        logger.error(`OpenAI API request failed - status: ${response.status}, statusText: ${response.statusText}, error: ${errorText}`);
+        this.logger.error(`OpenAI API request failed - status: ${response.status}, statusText: ${response.statusText}, error: ${errorText}`);
         throw new Error(`OpenAI API request failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const res = (await response.json()) as OpenAIModelsResponse;
-      logger.debug(`OpenAI API response received - modelCount: ${res.data?.length || 0}`);
+      this.logger.debug(`OpenAI API response received - modelCount: ${res.data?.length || 0}`);
       
       const staticModelIds = this.staticModels.map((m) => m.name);
 
@@ -93,9 +95,9 @@ export default class OpenAIProvider extends BaseProvider {
           !staticModelIds.includes(model.id),
       );
       
-      logger.debug(`Filtered models - count: ${filteredModels.length}`);
+      this.logger.debug(`Filtered models - count: ${filteredModels.length}`);
     } catch (error) {
-      logger.error(`Error fetching models from OpenAI API - error: ${error}`);
+      this.logger.error(`Error fetching models from OpenAI API - error: ${error}`);
       throw error;
     }
 
@@ -106,7 +108,7 @@ export default class OpenAIProvider extends BaseProvider {
       maxTokenAllowed: m.context_window || 32000,
     }));
     
-    logger.debug(`Returning mapped models - count: ${mappedModels.length}`);
+    this.logger.debug(`Returning mapped models - count: ${mappedModels.length}`);
     return mappedModels;
   }
 
@@ -118,7 +120,7 @@ export default class OpenAIProvider extends BaseProvider {
   }): LanguageModel {
     const { model, serverEnv, apiKeys, providerSettings } = options;
     
-    logger.debug(`Getting model instance - model: ${model}, hasServerEnv: ${!!serverEnv}, hasApiKeys: ${!!apiKeys}, hasProviderSettings: ${!!providerSettings}`);
+    this.logger.debug(`Getting model instance - model: ${model}, hasServerEnv: ${!!serverEnv}, hasApiKeys: ${!!apiKeys}, hasProviderSettings: ${!!providerSettings}`);
 
     const envRecord = this._convertEnvToRecord(serverEnv);
 
@@ -131,13 +133,13 @@ export default class OpenAIProvider extends BaseProvider {
     });
 
     if (!apiKey) {
-      logger.error(`Missing API key for ${this.name} model instance`);
+      this.logger.error(`Missing API key for ${this.name} model instance`);
       throw new Error(`Missing API key for ${this.name} provider`);
     }
     
-    logger.debug('API key retrieved for model instance');
+    this.logger.debug('API key retrieved for model instance');
 
-    logger.debug(`Creating OpenAI instance - model: ${model}`);
+    this.logger.debug(`Creating OpenAI instance - model: ${model}`);
     try {
       const openai = createOpenAI({
         apiKey,
@@ -145,7 +147,7 @@ export default class OpenAIProvider extends BaseProvider {
 
       return openai(model);
     } catch (error) {
-      logger.error(`Error creating OpenAI instance - model: ${model}, error: ${error}`);
+      this.logger.error(`Error creating OpenAI instance - model: ${model}, error: ${error}`);
       throw error;
     }
   }

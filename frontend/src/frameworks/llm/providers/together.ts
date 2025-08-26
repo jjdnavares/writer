@@ -8,9 +8,6 @@ import { BaseProvider, getOpenAILikeModel } from '../base-provider';
 import type { ModelInfo } from '@/types/provider';
 import type { LanguageModel } from 'ai';
 import type { IProviderSetting } from '@/types/model';
-import { createScopedLogger } from '@/lib/logger';
-
-const logger = createScopedLogger('TogetherProvider');
 
 interface TogetherModel {
   id: string;
@@ -28,6 +25,10 @@ interface TogetherModel {
  * Provides access to various LLMs hosted on Together.ai
  */
 export default class TogetherProvider extends BaseProvider {
+  static providerName = 'Together';
+  constructor() {
+    super();
+  }
   name = 'Together';
   getApiKeyLink = 'https://api.together.xyz/settings/api-keys';
   labelForGetApiKey = 'Get Together.ai API Key';
@@ -73,7 +74,7 @@ export default class TogetherProvider extends BaseProvider {
     settings?: IProviderSetting,
     serverEnv: Record<string, string> = {},
   ): Promise<ModelInfo[]> {
-    logger.debug('Fetching dynamic models from Together.ai API');
+    this.logger.debug('Fetching dynamic models from Together.ai API');
     
     const { baseUrl: fetchBaseUrl, apiKey } = this.getProviderBaseUrlAndKey({
       apiKeys,
@@ -86,12 +87,12 @@ export default class TogetherProvider extends BaseProvider {
     const baseUrl = fetchBaseUrl || this.config.baseUrl;
 
     if (!baseUrl || !apiKey) {
-      logger.warn('Missing baseUrl or apiKey for Together.ai provider');
+      this.logger.warn('Missing baseUrl or apiKey for Together.ai provider');
       return [];
     }
 
     try {
-      logger.debug(`Fetching models from ${baseUrl}/models`);
+      this.logger.debug(`Fetching models from ${baseUrl}/models`);
       const response = await fetch(`${baseUrl}/models`, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -100,20 +101,20 @@ export default class TogetherProvider extends BaseProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        logger.error(`Failed to fetch models - status: ${response.status}, error: ${errorText}`);
+        this.logger.error(`Failed to fetch models - status: ${response.status}, error: ${errorText}`);
         return [];
       }
 
       const res = (await response.json()) as TogetherModel[];
       
       if (!Array.isArray(res)) {
-        logger.error('Invalid response format from Together.ai API', { response: res });
+        this.logger.error('Invalid response format from Together.ai API', { response: res });
         return [];
       }
       
       // Filter to chat models only
       const chatModels = (res || []).filter((model: TogetherModel) => model.type === 'chat');
-      logger.debug(`Retrieved ${chatModels.length} chat models from Together.ai`);
+      this.logger.debug(`Retrieved ${chatModels.length} chat models from Together.ai`);
 
       return chatModels.map((m: TogetherModel) => ({
         name: m.id,
@@ -122,7 +123,7 @@ export default class TogetherProvider extends BaseProvider {
         maxTokenAllowed: m.context_length || 8000,
       }));
     } catch (error) {
-      logger.error('Error fetching models from Together.ai API', { error });
+      this.logger.error('Error fetching models from Together.ai API', { error });
       return [];
     }
   }
@@ -141,7 +142,7 @@ export default class TogetherProvider extends BaseProvider {
   }): LanguageModel {
     const { model, serverEnv, apiKeys, providerSettings } = options;
     
-    logger.debug(`Getting model instance - model: ${model}, hasServerEnv: ${!!serverEnv}, hasApiKeys: ${!!apiKeys}, hasProviderSettings: ${!!providerSettings}`);
+    this.logger.debug(`Getting model instance - model: ${model}, hasServerEnv: ${!!serverEnv}, hasApiKeys: ${!!apiKeys}, hasProviderSettings: ${!!providerSettings}`);
 
     const envRecord = this._convertEnvToRecord(serverEnv);
 
@@ -156,17 +157,17 @@ export default class TogetherProvider extends BaseProvider {
     const baseUrl = configBaseUrl || this.config.baseUrl;
 
     if (!baseUrl || !apiKey) {
-      logger.error(`Missing configuration for ${this.name} model instance`);
+      this.logger.error(`Missing configuration for ${this.name} model instance`);
       throw new Error(`Missing configuration for ${this.name} provider`);
     }
     
-    logger.debug('API key and baseUrl retrieved for model instance');
-    logger.debug(`Creating Together.ai instance - model: ${model}, baseUrl: ${baseUrl}`);
+    this.logger.debug('API key and baseUrl retrieved for model instance');
+    this.logger.debug(`Creating Together.ai instance - model: ${model}, baseUrl: ${baseUrl}`);
 
     try {
       return getOpenAILikeModel(baseUrl, apiKey, model);
     } catch (error) {
-      logger.error(`Error creating Together.ai instance - model: ${model}, error: ${error}`);
+      this.logger.error(`Error creating Together.ai instance - model: ${model}, error: ${error}`);
       throw error;
     }
   }

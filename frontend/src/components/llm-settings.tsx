@@ -5,17 +5,18 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useDebounce } from '@/hooks/use-debounce';
 import { 
   ProviderSelector, 
   ModelSelector, 
   ApiKeyInput 
 } from '@/frameworks/llm';
 import { llmEvents } from '@/frameworks/llm/events';
-import { getLLMApiKey, setLLMApiKey, fetchLLMProviders } from '@/lib/llm';
+import { setLLMApiKey, fetchLLMProviders } from '@/lib/llm';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Settings } from 'lucide-react';
-import type { ProviderInfo } from '@/types/model';
+import type { BaseProvider } from '@/frameworks/llm/base-provider';
 import type { ModelInfo } from '@/types/provider';
 
 interface LLMSettingsProps {
@@ -26,6 +27,9 @@ interface LLMSettingsProps {
   onModelChange: (model: string) => void;
   isLoadingModels: boolean;
   modelError: string;
+  apiKey: string;
+  onApiKeyChange: (apiKey: string) => void;
+  apiKeyError: string;
   disabled?: boolean;
   isExpanded?: boolean;
   setIsExpanded?: (expanded: boolean) => void;
@@ -39,16 +43,19 @@ export function LLMSettings({
   onModelChange,
   isLoadingModels,
   modelError,
+  apiKey,
+  onApiKeyChange,
+  apiKeyError,
   disabled = false,
   isExpanded: isExpandedProp,
   setIsExpanded: setIsExpandedProp
 }: LLMSettingsProps) {
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [providers, setProviders] = useState<BaseProvider[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const [providerError, setProviderError] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [apiKeyError, setApiKeyError] = useState('');
   const [localIsExpanded, setLocalIsExpanded] = useState(false);
+  const [internalApiKey, setInternalApiKey] = useState(apiKey);
+  const debouncedApiKey = useDebounce(internalApiKey, 500);
 
   useEffect(() => {
     const loadProviders = async () => {
@@ -67,24 +74,15 @@ export function LLMSettings({
   }, []);
 
   useEffect(() => {
-    if (!selectedProvider) return;
+    setInternalApiKey(apiKey);
+  }, [apiKey]);
 
-    const fetchApiKey = async () => {
-      const response = await getLLMApiKey(selectedProvider);
-      if (response.error) {
-        console.error('Failed to fetch API key:', response.error);
-        setApiKeyError('Failed to fetch API key.');
-        setApiKey('');
-      } else if (response.data?.message?.api_key) {
-        setApiKey(response.data.message.api_key);
-        setApiKeyError('');
-      } else {
-        setApiKey('');
-      }
-    };
+  useEffect(() => {
+    if (debouncedApiKey !== apiKey) {
+      handleApiKeyChange(debouncedApiKey);
+    }
+  }, [debouncedApiKey]);
 
-    fetchApiKey();
-  }, [selectedProvider]);
 
   const isControlled = isExpandedProp !== undefined && setIsExpandedProp !== undefined;
   const isExpanded = isControlled ? isExpandedProp : localIsExpanded;
@@ -95,14 +93,12 @@ export function LLMSettings({
   };
 
   const handleApiKeyChange = async (newApiKey: string) => {
-    setApiKey(newApiKey);
+    onApiKeyChange(newApiKey);
     if (selectedProvider) {
       const response = await setLLMApiKey(selectedProvider, newApiKey);
       if (response.error) {
         console.error('Failed to save API key:', response.error);
-        setApiKeyError('Failed to save API key.');
       } else {
-        setApiKeyError('');
         llmEvents.emit('apiKeyUpdated', { 
           providerName: selectedProvider, 
           apiKey: newApiKey 
@@ -111,7 +107,11 @@ export function LLMSettings({
     }
   };
 
-  const isApiKeyRequired = true; // Simplified for now
+  const handleImmediateApiKeyChange = (newApiKey: string) => {
+    setInternalApiKey(newApiKey);
+  };
+
+  const isApiKeyRequired = !!providers.find(p => p.name === selectedProvider)?.config.apiTokenKey;
 
   return (
     <Card>
@@ -153,8 +153,8 @@ export function LLMSettings({
           
           {isApiKeyRequired && (
             <ApiKeyInput
-              apiKey={apiKey}
-              onApiKeyChange={handleApiKeyChange}
+              apiKey={internalApiKey}
+              onApiKeyChange={handleImmediateApiKeyChange}
               error={apiKeyError}
             />
           )}

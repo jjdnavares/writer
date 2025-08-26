@@ -65,7 +65,7 @@ export function ProviderSelector({
         <SelectTrigger className="w-full">
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="max-h-[300px]">
           <SelectGroup>
             <SelectLabel>{label}</SelectLabel>
             {providers.map((provider) => (

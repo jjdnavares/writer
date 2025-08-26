@@ -14,6 +14,7 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Loader, AlertCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type { ModelInfo } from '@/types/provider';
 
 interface ModelSelectorProps {
@@ -64,10 +65,17 @@ export function ModelSelector({
         onValueChange={onModelChange}
         disabled={disabled || isLoading || models.length === 0}
       >
-        <SelectTrigger className="w-full">
+        <SelectTrigger disabled={models.length === 0 && !isLoading}>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="max-h-[300px]">
+          {isLoading && (
+            <div className="flex items-center justify-center p-2">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Loading models...</span>
+            </div>
+          )}
+
           <SelectGroup>
             <SelectLabel>{label}</SelectLabel>
             {models.map((model) => (

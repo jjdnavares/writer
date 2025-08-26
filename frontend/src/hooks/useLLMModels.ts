@@ -21,35 +21,32 @@ interface UseLLMModelsParams {
  * @returns Model data, loading state, error state, and refresh function
  */
 export function useLLMModels(params: UseLLMModelsParams) {
-  const { provider } = params;
+  const { provider, apiKeys } = params;
   const llmManager = LLMManager.getInstance();
 
-    const [models, setModels] = useState<ModelInfo[]>(() =>
-    llmManager.getModelList().filter((m: ModelInfo) => m.provider === provider)
-  );
+  const [models, setModels] = useState<ModelInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const reload = async () => {
+    // Skip reload if there's no provider selected
     if (!provider) {
       setModels([]);
       return;
     }
-
-    const handleModelListUpdated: (payload: ModelInfo[]) => void = (updatedModels) => {
-      setModels(updatedModels.filter((m: ModelInfo) => m.provider === provider));
-    };
-
-    llmEvents.on('modelListUpdated', handleModelListUpdated);
-    setModels(llmManager.getModelList().filter((m: ModelInfo) => m.provider === provider));
-
-    return () => {
-      llmEvents.off('modelListUpdated', handleModelListUpdated);
-    };
-  }, [provider, llmManager]);
-
-  const reload = async () => {
-    if (!provider) {
+    
+    const providerInstance = llmManager.getProvider(provider);
+    if (!providerInstance) {
+      setError(`Provider ${provider} not found`);
+      setModels([]);
+      return;
+    }
+    
+    // If provider requires an API key but none is available, just clear models and don't show error
+    // This is a normal state when switching providers before API key is loaded
+    if (providerInstance.config.apiTokenKey && !apiKeys?.[provider]) {
+      // Don't set error here, as this is an expected temporary state during provider switching
+      setModels([]);
       return;
     }
 
@@ -57,16 +54,35 @@ export function useLLMModels(params: UseLLMModelsParams) {
     setError('');
 
     try {
-      // The model list will be updated via the 'modelListUpdated' event
-      // after an API key is provided and models are fetched.
-      // This reload function can be used to manually trigger a refresh if needed in the future.
+      // Reuse the already validated provider instance from above
+      const modelList = await llmManager.getModelListFromProvider(providerInstance, { apiKeys });
+      setModels(modelList);
     } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : `Failed to fetch models for ${provider}`;
-        setError(errorMessage);
+      const errorMessage = err instanceof Error ? err.message : `Failed to fetch models for ${provider}`;
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (provider) {
+      reload();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, apiKeys]);
+
+  useEffect(() => {
+    const handleModelListUpdated = (updatedModels: ModelInfo[]) => {
+      setModels(updatedModels.filter((m) => m.provider === provider));
+    };
+
+    llmEvents.on('modelListUpdated', handleModelListUpdated);
+
+    return () => {
+      llmEvents.off('modelListUpdated', handleModelListUpdated);
+    };
+  }, [provider]);
 
   return {
     models,

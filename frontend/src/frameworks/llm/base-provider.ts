@@ -10,13 +10,19 @@ import type { IProviderSetting } from '@/types/model';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createScopedLogger } from '@/lib/logger';
 
-const logger = createScopedLogger('BaseProvider');
 
 /**
  * Abstract base class for all LLM providers
  * Provides standardized methods for model access and configuration
  */
 export abstract class BaseProvider implements ProviderInfo {
+  static providerName: string;
+  protected logger: ReturnType<typeof createScopedLogger>;
+
+  constructor() {
+    this.logger = createScopedLogger(this.constructor.name);
+  }
+
   abstract name: string;
   abstract staticModels: ModelInfo[];
   abstract config: ProviderConfig;
@@ -54,7 +60,7 @@ export abstract class BaseProvider implements ProviderInfo {
     const { apiKeys, providerSettings, serverEnv, defaultBaseUrlKey, defaultApiTokenKey } = options;
     let settingsBaseUrl = providerSettings?.baseUrl;
     
-    logger.debug(`${this.name}: Getting provider base URL and key - hasApiKeys: ${!!apiKeys}, hasProviderSettings: ${!!providerSettings}, hasServerEnv: ${!!serverEnv}, defaultBaseUrlKey: ${defaultBaseUrlKey}, defaultApiTokenKey: ${defaultApiTokenKey}`);
+    this.logger.debug(`${this.name}: Getting provider base URL and key - hasApiKeys: ${!!apiKeys}, hasProviderSettings: ${!!providerSettings}, hasServerEnv: ${!!serverEnv}, defaultBaseUrlKey: ${defaultBaseUrlKey}, defaultApiTokenKey: ${defaultApiTokenKey}`);
 
     if (settingsBaseUrl && settingsBaseUrl.length == 0) {
       settingsBaseUrl = undefined;
@@ -85,7 +91,7 @@ export abstract class BaseProvider implements ProviderInfo {
                    serverEnv?.[apiTokenKey] ? 'serverEnv' : 
                    (typeof process !== 'undefined' && process?.env?.[apiTokenKey]) ? 'process.env' : 'none';
     
-    logger.debug(`${this.name}: Provider configuration - hasBaseUrl: ${!!baseUrl}, hasApiKey: ${!!apiKey}, baseUrlSource: ${baseUrlSource}, apiKeySource: ${apiKeySource}`);
+    this.logger.debug(`${this.name}: Provider configuration - hasBaseUrl: ${!!baseUrl}, hasApiKey: ${!!apiKey}, baseUrlSource: ${baseUrlSource}, apiKeySource: ${apiKeySource}`);
     
     return {
       baseUrl,
@@ -99,7 +105,7 @@ export abstract class BaseProvider implements ProviderInfo {
     serverEnv?: Record<string, string>;
   }): ModelInfo[] | null {
     if (!this.cachedDynamicModels) {
-      logger.debug(`${this.name}: No cached dynamic models available`);
+      this.logger.debug(`${this.name}: No cached dynamic models available`);
       return null;
     }
 
@@ -107,12 +113,12 @@ export abstract class BaseProvider implements ProviderInfo {
     const generatedCacheKey = this.getDynamicModelsCacheKey(options);
 
     if (cacheKey !== generatedCacheKey) {
-      logger.debug(`${this.name}: Cache key mismatch`, { cacheKey, generatedCacheKey });
+      this.logger.debug(`${this.name}: Cache key mismatch`, { cacheKey, generatedCacheKey });
       this.cachedDynamicModels = undefined;
       return null;
     }
 
-    logger.debug(`${this.name}: Returning ${this.cachedDynamicModels.models.length} models from cache`);
+    this.logger.debug(`${this.name}: Returning ${this.cachedDynamicModels.models.length} models from cache`);
     return this.cachedDynamicModels.models;
   }
 
@@ -138,7 +144,7 @@ export abstract class BaseProvider implements ProviderInfo {
   ) {
     const cacheId = this.getDynamicModelsCacheKey(options);
 
-    logger.debug(`${this.name}: Caching ${models.length} dynamic models with cache ID: ${cacheId}`);
+    this.logger.debug(`${this.name}: Caching ${models.length} dynamic models`);
     this.cachedDynamicModels = {
       cacheId,
       models,

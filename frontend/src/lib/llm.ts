@@ -1,18 +1,24 @@
-import { FrappeApp } from 'frappe-js-sdk';
 import type { ModelInfo } from '@/types/provider';
-import type { IProviderSetting, ProviderInfo } from '@/types/model';
+import type { IProviderSetting } from '@/types/model';
 import { LLMManager } from '@/frameworks/llm/manager';
+import type { BaseProvider } from '@/frameworks/llm/base-provider';
 
-const frappe = new FrappeApp('http://localhost:8000');
-const call = frappe.call();
 const llmManager = LLMManager.getInstance();
 
 export const setLLMApiKey = async (provider: string, apiKey: string) => {
   try {
-    return await call.post('writer.api.set_llm_api_key', {
-      provider,
-      api_key: apiKey,
+    const response = await fetch('/api/method/writer.api.set_llm_api_key', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider,
+        api_key: apiKey,
+      }),
     });
+    const data = await response.json()
+    return data
   } catch (error) {
     console.error('Failed to set LLM API key:', error);
     return { error };
@@ -21,16 +27,24 @@ export const setLLMApiKey = async (provider: string, apiKey: string) => {
 
 export const getLLMApiKey = async (provider: string) => {
   try {
-    return await call.get('writer.api.get_llm_api_key', {
-      provider,
+    const response = await fetch('/api/method/writer.api.get_llm_api_key', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider,
+      }),
     });
+    const data = await response.json()
+    return data
   } catch (error) {
     console.error('Failed to get LLM API key:', error);
     return { error };
   }
 };
 
-export async function fetchLLMProviders(): Promise<ProviderInfo[]> {
+export async function fetchLLMProviders(): Promise<BaseProvider[]> {
   await llmManager.initialize();
   console.log('Fetching LLM providers from LLMManager...');
   return llmManager.getAllProviders();

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { deleteContent } from "@/lib/frappe";
+import { deleteContent } from "@/lib/history";
+import { getLLMApiKey } from "@/lib/llm";
 import { WriterSettings } from "./components/writer-settings";
 import { GeneratedContent } from "./components/generated-content";
 import { HistoryPage } from "./pages/History";
@@ -28,9 +29,10 @@ function WriterPage() {
   const [provider, setProvider] = useState("");
   const [model, setModel] = useState("");
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+  const [apiKeyError, setApiKeyError] = useState('');
   const [isLLMSettingsExpanded, setIsLLMSettingsExpanded] = useState(false);
 
-  const { providers, isLoading: isLoadingProviders, error: providerError } = useLLMProviders();
+  const { providers } = useLLMProviders();
   const { models, isLoading: isLoadingModels, error: modelError } = useLLMModels({ provider, apiKeys });
 
   useEffect(() => {
@@ -44,6 +46,40 @@ function WriterPage() {
       setModel(models[0].name);
     }
   }, [models, model]);
+
+  useEffect(() => {
+    if (provider) {
+      const fetchApiKey = async () => {
+        const response = await getLLMApiKey(provider);
+        if (response.message?.api_key) {
+          setApiKeys(prev => ({ ...prev, [provider]: response.message.api_key }));
+          setApiKeyError('');
+        } else {
+          setApiKeyError('API key not found. Please enter your API key.');
+        }
+      };
+      fetchApiKey();
+    }
+  }, [provider]);
+
+  const handleProviderChange = async (newProvider: string) => {
+    setProvider(newProvider);
+    setModel('');
+    
+    // Fetch API key for the new provider immediately
+    try {
+      const response = await getLLMApiKey(newProvider);
+      if (response.message?.api_key) {
+        setApiKeys(prev => ({ ...prev, [newProvider]: response.message.api_key }));
+        setApiKeyError('');
+      } else {
+        setApiKeyError('API key not found. Please enter your API key.');
+      }
+    } catch (error) {
+      console.error('Error fetching API key for new provider:', error);
+      setApiKeyError('Failed to fetch API key. Please enter it manually.');
+    }
+  };
 
   const onContentGenerated = async () => {
     navigate('/history');
@@ -62,20 +98,16 @@ function WriterPage() {
                 <LLMSettings
           isExpanded={isLLMSettingsExpanded}
           setIsExpanded={setIsLLMSettingsExpanded}
-
-          providers={providers}
           models={models}
           selectedProvider={provider}
           selectedModel={model}
-          apiKey={apiKeys[provider] || ''}
-          onProviderChange={setProvider}
+          onProviderChange={handleProviderChange}
           onModelChange={setModel}
-          onApiKeyChange={(key) => setApiKeys(prev => ({ ...prev, [provider]: key }))}
-          isLoadingProviders={isLoadingProviders}
           isLoadingModels={isLoadingModels}
-          providerError={providerError || ''}
           modelError={modelError || ''}
-          apiKeyError={''}
+          apiKey={apiKeys[provider] || ''}
+          onApiKeyChange={(key) => setApiKeys(prev => ({ ...prev, [provider]: key }))}
+          apiKeyError={apiKeyError}
         />
         <WriterSettings onGenerate={onContentGenerated} provider={provider} model={model} />
       </div>

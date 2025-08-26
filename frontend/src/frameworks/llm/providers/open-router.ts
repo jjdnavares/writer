@@ -9,9 +9,7 @@ import type { ModelInfo } from '@/types/provider';
 import type { LanguageModel } from 'ai';
 import type { IProviderSetting } from '@/types/model';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { createScopedLogger } from '@/lib/logger';
 
-const logger = createScopedLogger('OpenRouterProvider');
 
 /**
  * Model information structure from Open Router API
@@ -38,6 +36,10 @@ interface OpenRouterModelsResponse {
  * Provides access to multiple LLMs through a unified API
  */
 export default class OpenRouterProvider extends BaseProvider {
+  static providerName = 'OpenRouter';
+  constructor() {
+    super();
+  }
   name = 'OpenRouter';
   getApiKeyLink = 'https://openrouter.ai/settings/keys';
   labelForGetApiKey = 'Get Open Router API Key';
@@ -90,10 +92,10 @@ export default class OpenRouterProvider extends BaseProvider {
    * @returns Array of available models with pricing details
    */
   async getDynamicModels(): Promise<ModelInfo[]> {
-    logger.debug('Fetching dynamic models from Open Router API');
+    this.logger.debug('Fetching dynamic models from Open Router API');
     
     try {
-      logger.debug('Requesting models from https://openrouter.ai/api/v1/models');
+      this.logger.debug('Requesting models from https://openrouter.ai/api/v1/models');
       const response = await fetch('https://openrouter.ai/api/v1/models', {
         headers: {
           'Content-Type': 'application/json',
@@ -102,18 +104,18 @@ export default class OpenRouterProvider extends BaseProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        logger.error(`Failed to fetch models - status: ${response.status}, error: ${errorText}`);
+        this.logger.error(`Failed to fetch models - status: ${response.status}, error: ${errorText}`);
         return [];
       }
 
       const data = (await response.json()) as OpenRouterModelsResponse;
       
       if (!data.data || !Array.isArray(data.data)) {
-        logger.error('Invalid response format from Open Router API', { response: data });
+        this.logger.error('Invalid response format from Open Router API', { response: data });
         return [];
       }
       
-      logger.debug(`Retrieved ${data.data.length} models from Open Router`);
+      this.logger.debug(`Retrieved ${data.data.length} models from Open Router`);
 
       // Sort alphabetically and format with pricing information
       return data.data
@@ -125,7 +127,7 @@ export default class OpenRouterProvider extends BaseProvider {
           maxTokenAllowed: m.context_length || 8000,
         }));
     } catch (error) {
-      logger.error('Error fetching models from Open Router API', { error });
+      this.logger.error('Error fetching models from Open Router API', { error });
       return [];
     }
   }
@@ -144,7 +146,7 @@ export default class OpenRouterProvider extends BaseProvider {
   }): LanguageModel {
     const { model, serverEnv, apiKeys, providerSettings } = options;
     
-    logger.debug(`Getting model instance - model: ${model}, hasServerEnv: ${!!serverEnv}, hasApiKeys: ${!!apiKeys}, hasProviderSettings: ${!!providerSettings}`);
+    this.logger.debug(`Getting model instance - model: ${model}, hasServerEnv: ${!!serverEnv}, hasApiKeys: ${!!apiKeys}, hasProviderSettings: ${!!providerSettings}`);
 
     const envRecord = this._convertEnvToRecord(serverEnv);
 
@@ -157,12 +159,12 @@ export default class OpenRouterProvider extends BaseProvider {
     });
 
     if (!apiKey) {
-      logger.error(`Missing API key for ${this.name} model instance`);
+      this.logger.error(`Missing API key for ${this.name} model instance`);
       throw new Error(`Missing API key for ${this.name} provider`);
     }
     
-    logger.debug('API key retrieved for model instance');
-    logger.debug(`Creating Open Router instance - model: ${model}`);
+    this.logger.debug('API key retrieved for model instance');
+    this.logger.debug(`Creating Open Router instance - model: ${model}`);
 
     try {
       const openRouter = createOpenRouter({
@@ -172,7 +174,7 @@ export default class OpenRouterProvider extends BaseProvider {
       const instance = openRouter.chat(model) as LanguageModel;
       return instance;
     } catch (error) {
-      logger.error(`Error creating Open Router instance - model: ${model}, error: ${error}`);
+      this.logger.error(`Error creating Open Router instance - model: ${model}, error: ${error}`);
       throw error;
     }
   }

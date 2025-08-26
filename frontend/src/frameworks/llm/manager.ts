@@ -18,7 +18,7 @@ const logger = createScopedLogger('LLMManager');
  */
 export class LLMManager {
   private static _instance: LLMManager | undefined;
-  private _providers: Map<string, BaseProvider> = new Map();
+  private _providerClasses: Map<string, new () => BaseProvider> = new Map();
   private _modelList: ModelInfo[] = [];
   private readonly _env: Record<string, string> = {};
   private _boundApiKeyHandler: (data: { providerName: string; apiKey: string }) => Promise<void>;
@@ -45,13 +45,13 @@ export class LLMManager {
    * Overwrites the current providers with a new set.
    * @param providers A map of provider instances.
    */
-  _setProviders(providers: Map<string, BaseProvider>) {
-    this._providers = providers;
+  _setProviders(providerClasses: Map<string, new () => BaseProvider>) {
+    this._providerClasses = providerClasses;
     this._initializeModelList();
   }
 
   async initialize() {
-    if (this._providers.size === 0) {
+    if (this._providerClasses.size === 0) {
       await this._registerProvidersFromDirectory();
     }
   }
@@ -74,8 +74,8 @@ export class LLMManager {
         if (typeof ProviderClass === 'function' && ProviderClass.prototype instanceof BaseProvider) {
           const provider = new ProviderClass();
           try {
-            this.registerProvider(provider);
-          } catch (error) {
+            this.registerProvider(ProviderClass);
+          } catch (error) { 
             const message = error instanceof Error ? error.message : String(error);
             logger.warn('Failed To Register Provider: ', provider.name, 'error:', message);
           }
@@ -87,18 +87,24 @@ export class LLMManager {
     }
   }
 
-  registerProvider(provider: BaseProvider) {
-    if (this._providers.has(provider.name)) {
-      logger.warn(`Provider ${provider.name} is already registered. Skipping.`);
+  registerProvider(ProviderClass: new () => BaseProvider) {
+    // @ts-expect-error - accessing static property on abstract class
+    const providerName = ProviderClass.providerName;
+    if (this._providerClasses.has(providerName)) {
+      logger.warn(`Provider ${providerName} is already registered. Skipping.`);
       return;
     }
 
-    logger.info('Registering Provider: ', provider.name);
-    this._providers.set(provider.name, provider);
+    logger.info('Registering Provider: ', providerName);
+    this._providerClasses.set(providerName, ProviderClass);
   }
 
   getProvider(name: string): BaseProvider | undefined {
-    return this._providers.get(name);
+    const ProviderClass = this._providerClasses.get(name);
+    if (ProviderClass) {
+      return new ProviderClass();
+    }
+    return undefined;
   }
 
   getDefaultProvider(): BaseProvider {
@@ -118,7 +124,7 @@ export class LLMManager {
   }
 
   getAllProviders(): BaseProvider[] {
-    return Array.from(this._providers.values());
+    return Array.from(this._providerClasses.values()).map(ProviderClass => new ProviderClass());
   }
 
   getModelList(): ModelInfo[] {
@@ -153,8 +159,10 @@ export class LLMManager {
   }
 
   private _initializeModelList() {
-    this._modelList = this.getStaticModelList();
-    this._modelList.sort((a, b) => a.name.localeCompare(b.name));
+    // This method now seems to be of less utility since we don't have instances at init time.
+    // It could be removed or refactored if model lists are purely dynamic.
+    // For now, clearing the list.
+    this._modelList = [];
   }
 
   private updateModelListWithDynamicModels(providerName: string, dynamicModels: ModelInfo[]) {
@@ -165,7 +173,7 @@ export class LLMManager {
   }
 
   getStaticModelList() {
-    return [...this._providers.values()].flatMap((p) => p.staticModels || []);
+    return this.getAllProviders().flatMap((p) => p.staticModels || []);
   }
 
   getStaticModelListFromProvider(provider: BaseProvider) {
@@ -180,10 +188,10 @@ export class LLMManager {
       serverEnv?: Record<string, string>;
     },
   ): Promise<ModelInfo[]> {
-    const provider = this._providers.get(providerArg.name);
+    const provider = providerArg;
 
     if (!provider) {
-      throw new Error(`Provider ${providerArg.name} not found`);
+      throw new Error(`Provider not found`);
     }
 
     const staticModels = provider.staticModels || [];

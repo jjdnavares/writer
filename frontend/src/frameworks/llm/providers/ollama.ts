@@ -9,9 +9,7 @@ import type { ModelInfo } from '@/types/provider';
 import type { LanguageModel } from 'ai';
 import type { IProviderSetting } from '@/types/model';
 import { ollama } from 'ollama-ai-provider';
-import { createScopedLogger } from '@/lib/logger';
 
-const logger = createScopedLogger('OllamaProvider');
 
 /**
  * Detailed model information from Ollama API
@@ -49,6 +47,10 @@ export interface OllamaApiResponse {
  * Connects to locally running Ollama instances
  */
 export default class OllamaProvider extends BaseProvider {
+  static providerName = 'Ollama';
+  constructor() {
+    super();
+  }
   name = 'Ollama';
   getApiKeyLink = 'https://ollama.com/download';
   labelForGetApiKey = 'Download Ollama';
@@ -79,7 +81,7 @@ export default class OllamaProvider extends BaseProvider {
     adjustedUrl = adjustedUrl.replace('localhost', 'host.docker.internal');
     adjustedUrl = adjustedUrl.replace('127.0.0.1', 'host.docker.internal');
     
-    logger.debug(`Adjusted baseUrl for Docker: ${baseUrl} -> ${adjustedUrl}`);
+    this.logger.debug(`Adjusted baseUrl for Docker: ${baseUrl} -> ${adjustedUrl}`);
     return adjustedUrl;
   }
 
@@ -107,7 +109,7 @@ export default class OllamaProvider extends BaseProvider {
     settings?: IProviderSetting,
     serverEnv: Record<string, string> = {},
   ): Promise<ModelInfo[]> {
-    logger.debug('Fetching dynamic models from Ollama');
+    this.logger.debug('Fetching dynamic models from Ollama');
     
     let { baseUrl } = this.getProviderBaseUrlAndKey({
       apiKeys,
@@ -119,7 +121,7 @@ export default class OllamaProvider extends BaseProvider {
 
     if (!baseUrl) {
       baseUrl = this.config.baseUrl;
-      logger.debug(`No baseUrl found, using default: ${baseUrl}`);
+      this.logger.debug(`No baseUrl found, using default: ${baseUrl}`);
     }
 
     // Check if we're running in Docker
@@ -131,23 +133,23 @@ export default class OllamaProvider extends BaseProvider {
     }
 
     try {
-      logger.debug(`Fetching models from ${baseUrl}/api/tags`);
+      this.logger.debug(`Fetching models from ${baseUrl}/api/tags`);
       const response = await fetch(`${baseUrl}/api/tags`);
       
       if (!response.ok) {
         const errorText = await response.text();
-        logger.error(`Failed to fetch models - status: ${response.status}, error: ${errorText}`);
+        this.logger.error(`Failed to fetch models - status: ${response.status}, error: ${errorText}`);
         return [];
       }
       
       const data = (await response.json()) as OllamaApiResponse;
       
       if (!data.models || !Array.isArray(data.models)) {
-        logger.error('Invalid response format from Ollama API', { response: data });
+        this.logger.error('Invalid response format from Ollama API', { response: data });
         return [];
       }
       
-      logger.debug(`Retrieved ${data.models.length} models from Ollama`);
+      this.logger.debug(`Retrieved ${data.models.length} models from Ollama`);
 
       return data.models.map((model: OllamaModel) => ({
         name: model.name,
@@ -156,7 +158,7 @@ export default class OllamaProvider extends BaseProvider {
         maxTokenAllowed: 8000,
       }));
     } catch (error) {
-      logger.error('Error fetching models from Ollama', { error });
+      this.logger.error('Error fetching models from Ollama', { error });
       return [];
     }
   }
@@ -175,7 +177,7 @@ export default class OllamaProvider extends BaseProvider {
   }): LanguageModel {
     const { model, serverEnv, apiKeys, providerSettings } = options;
     
-    logger.debug(`Getting model instance - model: ${model}, hasServerEnv: ${!!serverEnv}, hasApiKeys: ${!!apiKeys}, hasProviderSettings: ${!!providerSettings}`);
+    this.logger.debug(`Getting model instance - model: ${model}, hasServerEnv: ${!!serverEnv}, hasApiKeys: ${!!apiKeys}, hasProviderSettings: ${!!providerSettings}`);
     
     const envRecord = this._convertEnvToRecord(serverEnv);
 
@@ -189,7 +191,7 @@ export default class OllamaProvider extends BaseProvider {
 
     if (!baseUrl) {
       baseUrl = this.config.baseUrl;
-      logger.debug(`No baseUrl found, using default: ${baseUrl}`);
+      this.logger.debug(`No baseUrl found, using default: ${baseUrl}`);
     }
 
     const isDocker = process?.env?.RUNNING_IN_DOCKER === 'true' || envRecord.RUNNING_IN_DOCKER === 'true';
@@ -199,11 +201,11 @@ export default class OllamaProvider extends BaseProvider {
       baseUrl = this.adjustBaseUrlForDocker(baseUrl, isDocker);
     }
 
-    logger.debug(`Creating Ollama instance - model: ${model}, baseUrl: ${baseUrl}`);
+    this.logger.debug(`Creating Ollama instance - model: ${model}, baseUrl: ${baseUrl}`);
     
     try {
       const numCtx = this.getDefaultNumCtx(serverEnv);
-      logger.debug(`Using context size: ${numCtx}`);
+      this.logger.debug(`Using context size: ${numCtx}`);
       
       const ollamaInstance = ollama(model, {
         numCtx,
@@ -211,11 +213,11 @@ export default class OllamaProvider extends BaseProvider {
 
       // Set the API base URL
       ollamaInstance.config.baseURL = `${baseUrl}/api`;
-      logger.debug(`Configured Ollama with baseURL: ${ollamaInstance.config.baseURL}`);
+      this.logger.debug(`Configured Ollama with baseURL: ${ollamaInstance.config.baseURL}`);
 
       return ollamaInstance;
     } catch (error) {
-      logger.error(`Error creating Ollama instance - model: ${model}, error: ${error}`);
+      this.logger.error(`Error creating Ollama instance - model: ${model}, error: ${error}`);
       throw error;
     }
   }
