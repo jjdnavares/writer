@@ -56,7 +56,7 @@ def _call_llm(prompt: str, provider: str, model: str) -> str:
     api_key = api_key_dict.get("api_key")
     
     if not api_key:
-        frappe.throw(f"API key for '{provider}' is not set for the current user.")
+        frappe.throw(f"API key for '{provider}' is not set. Please configure it in your personal LLM Settings or ask an administrator to set up system-level LLM API keys.")
     
     # Use dynamic function dispatch pattern to call the appropriate provider handler
     # Normalize provider name to match function naming (lowercase with underscores)
@@ -515,7 +515,24 @@ def _call_open_router_llm(prompt: str, model: str, api_key: str) -> str:
 @frappe.whitelist()
 def generate_content(keyword: str, content_type: str, tone: str, provider: str, model: str):
     # 1. Get the appropriate prompt template
-    prompt_info = CONTENT_PROMPTS.get(content_type)
+    # Normalize content type between frontend kebab-case and backend format
+    normalized_content_type = content_type
+    
+    # Map from frontend kebab-case to backend format if needed
+    content_type_map = {
+        'blog-post': 'Blog Post',
+        'article': 'Article',
+        'product-description': 'Product Description',
+        'landing-page': 'Landing Page',
+        'seo-meta-description': 'SEO Meta Description',
+        'social-media-post': 'Social Media Post',
+        'blog-outline': 'Blog Outline',
+    }
+    
+    if content_type in content_type_map:
+        normalized_content_type = content_type_map[content_type]
+    
+    prompt_info = CONTENT_PROMPTS.get(normalized_content_type) or CONTENT_PROMPTS.get(content_type)
     if not prompt_info:
         frappe.throw(f"Invalid content type: {content_type}")
 
@@ -597,15 +614,50 @@ def set_llm_api_key(provider: str, api_key: str):
 
 @frappe.whitelist()
 def get_llm_api_key(provider: str):
+    """Get LLM API key for the specified provider
+    
+    First checks for user-specific API key, then falls back to system-level API key
+    
+    Args:
+        provider (str): The LLM provider name (e.g., 'openai', 'anthropic')
+
+    Returns:
+        dict: Dictionary with 'api_key' if found, empty dict otherwise
+        
+    Note:
+        Returns a dict with 'api_key' key to maintain API compatibility
+    """
+    # Normalize provider name for consistency in lookups
+    provider_normalized = provider.lower()
+    
+    # First try to get user-specific API key
     user = frappe.session.user
     llm_settings_name = frappe.db.exists("LLM Settings", {"user": user})
+    frappe.log(f"LLM Settings Name: {llm_settings_name}")
 
-    if not llm_settings_name:
-        return {}
+    if llm_settings_name:
+        doc = frappe.get_doc("LLM Settings", llm_settings_name)
+        frappe.log(f"LLM Settings: {doc}")
+        for setting in doc.provider_settings:
+            frappe.log(f"Provider Setting: {setting}")
+            if setting.provider.lower() == provider_normalized:
+                api_key = setting.get_password("api_key")
+                if api_key:
+                    return {"api_key": api_key}
 
-    doc = frappe.get_doc("LLM Settings", llm_settings_name)
-    for setting in doc.provider_settings:
-        if setting.provider == provider:
-            return {"api_key": setting.get_password("api_key")}
+    # If no user-specific key is found, check system settings
+    try:
+        system_settings = frappe.get_single("LLM System Settings")
+        frappe.log(f"System Settings: {system_settings}")
+        for setting in system_settings.system_provider_settings:
+            frappe.log(f"System Provider Setting: {setting}")
+            if setting.provider.lower() == provider_normalized:
+                api_key = setting.get_password("api_key")
+                frappe.log(f"API Key: {api_key}")
+                if api_key:
+                    return {"api_key": api_key}
+    except Exception as e:
+        frappe.log_error(f"Error accessing system LLM settings: {str(e)}", "LLM API Key Error")
 
+    # No API key found
     return {}

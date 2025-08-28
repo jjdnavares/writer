@@ -16,7 +16,7 @@ def anthropic_models():
         api_key = get_anthropic_api_key()
         
         if not api_key:
-            frappe.throw(_("Anthropic API key not found. Please set up your API key in settings."))
+            frappe.throw(_("Anthropic API key not found. Please configure it in your personal LLM Settings or ask an administrator to set up system-level LLM API keys."))
         
         headers = {
             "x-api-key": api_key,
@@ -45,16 +45,38 @@ def anthropic_models():
         frappe.throw(_("Error fetching Anthropic models: {}").format(str(e)))
 
 def get_anthropic_api_key():
-    """Get Anthropic API key for the current user"""
+    """Get Anthropic API key for the current user or from system settings
+    
+    First checks for user-specific API key, then falls back to system-level API key
+    
+    Returns:
+        str: API key if found, None otherwise
+    """
+    provider = "Anthropic"
+    provider_normalized = provider.lower()
+    
+    # First try to get user-specific API key
     user = frappe.session.user
     llm_settings_name = frappe.db.exists("LLM Settings", {"user": user})
 
-    if not llm_settings_name:
-        return None
+    if llm_settings_name:
+        doc = frappe.get_doc("LLM Settings", llm_settings_name)
+        for setting in doc.provider_settings:
+            if setting.provider.lower() == provider_normalized:
+                api_key = setting.get_password("api_key")
+                if api_key:
+                    return api_key
 
-    doc = frappe.get_doc("LLM Settings", llm_settings_name)
-    for setting in doc.provider_settings:
-        if setting.provider == "Anthropic":
-            return setting.get_password("api_key")
+    # If no user-specific key is found, check system settings
+    try:
+        system_settings = frappe.get_single("LLM System Settings")
+        for setting in system_settings.system_provider_settings:
+            if setting.provider.lower() == provider_normalized:
+                api_key = setting.get_password("api_key")
+                if api_key:
+                    return api_key
+    except Exception as e:
+        frappe.log_error(f"Error accessing system LLM settings: {str(e)}", "Anthropic API Key Error")
 
+    # No API key found
     return None
