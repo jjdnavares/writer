@@ -27,6 +27,7 @@ export const setLLMApiKey = async (provider: string, apiKey: string) => {
 
 export const getLLMApiKey = async (provider: string) => {
   try {
+    console.log('Fetching LLM API key for provider:', provider);
     const response = await fetch('/api/method/writer.api.get_llm_api_key', {
       method: 'POST',
       headers: {
@@ -34,9 +35,11 @@ export const getLLMApiKey = async (provider: string) => {
       },
       body: JSON.stringify({
         provider,
+        // Only pass the provider parameter, no additional parameters
       }),
     });
     const data = await response.json()
+    console.log('Fetched LLM API key:', data);
     return data
   } catch (error) {
     console.error('Failed to get LLM API key:', error);

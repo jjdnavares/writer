@@ -53,7 +53,7 @@ export function LLMSettings({
   const [providers, setProviders] = useState<BaseProvider[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const [providerError, setProviderError] = useState('');
-  const [localIsExpanded, setLocalIsExpanded] = useState(false);
+  const [localIsExpanded, setLocalIsExpanded] = useState(true);
   const [internalApiKey, setInternalApiKey] = useState(apiKey);
   const debouncedApiKey = useDebounce(internalApiKey, 500);
 

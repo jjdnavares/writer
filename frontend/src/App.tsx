@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { deleteContent } from "@/lib/history";
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { deleteContent, getGeneratedContents } from "@/lib/history";
 import { getLLMApiKey } from "@/lib/llm";
 import { WriterSettings } from "./components/writer-settings";
 import { GeneratedContent } from "./components/generated-content";
@@ -12,7 +12,8 @@ import { useLLMModels } from "@/hooks/useLLMModels";
 export interface Content {
   name: string;
   title: string;
-  content: string;
+  content?: string;
+  generated_text?: string;
   prompt: string;
   keyword: string;
   tone: string;
@@ -22,15 +23,16 @@ export interface Content {
 
 function WriterPage() {
   const location = useLocation();
-  const navigate = useNavigate();
   const [activeContent, setActiveContent] = useState<Content | null>(location.state?.activeContent || null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   // LLM state
   const [provider, setProvider] = useState("");
   const [model, setModel] = useState("");
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [apiKeyError, setApiKeyError] = useState('');
-  const [isLLMSettingsExpanded, setIsLLMSettingsExpanded] = useState(false);
+  const [isLLMSettingsExpanded, setIsLLMSettingsExpanded] = useState(true);
 
   const { providers } = useLLMProviders();
   const { models, isLoading: isLoadingModels, error: modelError } = useLLMModels({ provider, apiKeys });
@@ -81,8 +83,29 @@ function WriterPage() {
     }
   };
 
-  const onContentGenerated = async () => {
-    navigate('/history');
+  const onContentGenerated = async (generatedContent: Content | null = null) => {
+    setIsGenerating(false);
+    setGenerationError(null);
+    if (generatedContent) {
+      // If content is passed directly, use it
+      setActiveContent(generatedContent);
+    } else {
+      // Otherwise fetch the latest content
+      const response = await getGeneratedContents();
+      if (response.message && response.message.length > 0) {
+        setActiveContent(response.message[0]);
+      }
+    }
+  };
+  
+  const handleGenerateStart = () => {
+    setIsGenerating(true);
+    setGenerationError(null);
+  };
+  
+  const handleGenerateError = (error: string) => {
+    setIsGenerating(false);
+    setGenerationError(error);
   };
 
   const handleDelete = async (name: string) => {
@@ -109,36 +132,69 @@ function WriterPage() {
           onApiKeyChange={(key) => setApiKeys(prev => ({ ...prev, [provider]: key }))}
           apiKeyError={apiKeyError}
         />
-        <WriterSettings onGenerate={onContentGenerated} provider={provider} model={model} />
+        <WriterSettings 
+          onGenerate={onContentGenerated} 
+          onGenerateStart={handleGenerateStart} 
+          onError={handleGenerateError}
+          provider={provider} 
+          model={model} 
+        />
       </div>
       <div className="lg:col-span-2">
         <GeneratedContent
           activeContent={activeContent}
           onDelete={handleDelete}
+          isLoading={isGenerating}
+          error={generationError}
         />
       </div>
     </main>
   );
 }
 
+function AppNavigation() {
+  const location = useLocation();
+  const currentPath = location.pathname;
+  
+  return (
+    <nav className="flex border-b w-full justify-center">
+      <Link 
+        to="/" 
+        className={`py-2 px-4 ${currentPath === '/' ? 'border-b-2 border-primary font-semibold' : 'text-muted-foreground'}`}
+      >
+        Writer
+      </Link>
+      <Link 
+        to="/history" 
+        className={`py-2 px-4 ${currentPath === '/history' ? 'border-b-2 border-primary font-semibold' : 'text-muted-foreground'}`}
+      >
+        History
+      </Link>
+    </nav>
+  );
+}
+
+function Layout() {
+  return (
+    <div className="min-h-screen bg-muted/40 p-4 sm:p-8">
+      <div className="max-w-6xl mx-auto">
+        <header className="flex flex-col items-center gap-3 mb-8">
+          <h1 className="text-3xl font-bold">Content Writer</h1>
+          <AppNavigation />
+        </header>
+        <Routes>
+          <Route path="/" element={<WriterPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+        </Routes>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-muted/40 p-4 sm:p-8">
-        <div className="max-w-6xl mx-auto">
-          <header className="flex items-center justify-between gap-2 mb-8">
-            <h1 className="text-3xl font-bold">SEO Content Writer</h1>
-            <nav className="flex border-b">
-              <Link to="/" className="py-2 px-4 border-b-2 border-primary font-semibold">Writer</Link>
-              <Link to="/history" className="py-2 px-4 text-muted-foreground">History</Link>
-            </nav>
-          </header>
-          <Routes>
-            <Route path="/" element={<WriterPage />} />
-            <Route path="/history" element={<HistoryPage />} />
-          </Routes>
-        </div>
-      </div>
+      <Layout />
     </Router>
   );
 }
